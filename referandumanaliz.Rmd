@@ -1,0 +1,89 @@
+---
+title: "R ile Veri Madenciliği"
+output: html_document
+author: "Erdinç TAŞÇI"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 2017 Yılı Türkiye Anayasa Değişikliği Referandumu Sonuçları Üzerinden Veri Madenciliği 
+
+---
+
+   <p>    Bu çalışmada Mustafa Akgül Özgür Yazılım Kış Kampı 2023 kapsamında 'R ile Veri Madenciliği' kursu sırasında, örnek veriseti üzerinde yaptığım uygulamaları içermektedir. Amacım keşifsel veri analizi yapmak, bu yüzden Kaggle üzerinden verisetlerine göz gezdirdim. Referandum sonuçları içeren bir veriseti gördüğümde uygun olduğunu düşündüm. Boş gözlem içeriyor mu? İçeriyor ise bu gözlemler nasıl bir dağılım izliyor? gibi soruların cevaplarını göreceğiz.      
+   <p>   Bu bir seçim sonucu içerdiği için veriyi tanımak adına bu duruma özel sorular düşünmemiz gerekiyor. Veriseti 1052 satır ve 8 sütundan oluşuyor. Bu sütunlar İl, İlçe, Nüfusa kayıtlı seçmen sayısı, Oy kullanan seçmen sayısı, Geçerli oy, Geçersiz oy ve son iki sütunda da Evet - Hayır oy sayıları bilgilerini içeriyor. 
+
+```{r,warning=FALSE,message=FALSE,results='hide'}
+requiredPackages <- c("validate","assertr","validatetools", "errorlocate","dplyr","magrittr","readxl")
+
+
+ipak <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg))
+    install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE)
+}
+
+ipak(requiredPackages)
+```
+ Gerekli paketleri yüklüyorum. Bu kod bloğu sayesinde gerekli olan kütüphane kurulu durumda değilse kütüphaneyi indiriyor.
+
+```{r}
+ReferandumSonucu <- read_excel("ReferandumSonucu.xlsx")
+```
+Veriyi import edip 'ReferandumSonucu' değişkenine atıyorum. 
+
+```{r}
+head(ReferandumSonucu)
+```
+Verinin ilk 6 satırını çağırarak verinin doğru yüklenip yüklenmediğini kontrol ediyorum.  
+Bu noktada artık artık verisetinde olağan dışı durumlar var mı bunları kontrol etmek gerekiyor. Benim aklıma gelen ilk soru 'Herhangi bir ilçede nüfusa kayıtlı seçmen sayısından fazla oy kullanan kişi sayısı var mı?' oldu. Karşılaştırma yapacağım iki sütun da sayısal verilerden oluştuğu direkt sorgu yazabiliyorum.
+
+```{r}
+E1<-check_that(ReferandumSonucu, kayitli > oykullanan)
+print(E1)
+```
+Evet! Yaptığım sorgunun sonucuna göre nüfusa kayıtlı kişi sayısından daha fazla oy kullanan kişi çıktı. Bunun farklı sebepleri olabilir, ama bir sorun olduğu kesin. Bu yüzden bu hatalı satırı bulmak istiyorum.
+
+```{r}
+filter(ReferandumSonucu, kayitli < oykullanan)
+```
+`filter()` fonksiyonunu kullanarak bu sorunun hangi satırda olduğunu buluyorum. Görüldüğü üzere Osmaniye'nin Toprakkale ilçesinde "kayitli" sütununda 10.510 kişi varken, "oykullanan" sütununda 10.640 kişi gözüküyor. Oy kullanabilecek maksimum seçmen sayısından 130 fazla oy kullanılmış. 10.510 kişinin tamamının sandığa gitmesi bile beklenmezken 130 fazla çıkması burada bir sorun olduğunu gösteriyor.  
+Burada istediğim şey sorunu bulmaktı, bu yüzden boş gözlemlerle ilgilenmeye başlıyorum.
+
+```{r,warning=FALSE,message=FALSE,results='hide'}
+.packages = c("Amelia","VIM","naniar")
+.inst <- .packages %in% installed.packages()
+if(length(.packages[!.inst]) > 0) install.packages(.packages[!.inst])
+lapply(.packages, require, character.only=TRUE)
+```
+Gerekli olan paketleri kuruyorum.
+
+```{r,warning=FALSE,message=FALSE}
+Amelia::missmap(ReferandumSonucu)
+visdat::vis_miss(ReferandumSonucu)
+```
+
+Bu şekilde farklı "boş gözlem" görselleştirme paketleri kullanarak boş gözlemlerin dağılımına bakabiliriz. Toplamda %1 N/A gözükürken bunlarının hepsinin "ilçe" sütununda olduğunu ve bu sütünün da %8'inin N/A olduğunu görüyoruz. Dağılımın düzgün gözükmesinden dolayı veri setine tekrar bakıyorum ve bunun sebebinin, veriler girilirken her yeni şehre geçildiğinde, ilçe bazlı veriler girilmeden önce o şehrin tamamını kapsayan verilerinin girilmiş olması olduğunu anlıyoruz. Bu noktaya ilçe ismi yazılamayacağından, N/A olarak bırakılmış. Toplamda kaç adet satırın boş gözlem içerdiğine bakalım.
+
+```{r}
+n_case_miss(ReferandumSonucu)
+```
+Buradan aldığımız çıktı, az önceki bulguyu teyit ediyor. 81 adet boş gözlem içeren satır var, bu da 81 sütunda şehrin genel verileri verildiği için 'ilce' sütununun N/A bırakılması anlamına geliyor. Boş gözlemlerin biraz daha detaylı bir raporunu alalım.
+
+```{r}
+miss_var_summary(ReferandumSonucu)
+```
+Buradan da gördüğümüz gibi 'ilce' sütununda 81 adet N/A var. Bu bilgi sayesinde öğreniyorum ki N/A içeren her satır ail olduğu şehrin genel istatistiğini veriyor. Bu satırları ayrı olarak ele alırsam 81 ilin genel sonuçlarını elde etmiş olurum.
+
+```{r}
+missing_rows <- which(is.na(ReferandumSonucu[,2]))
+missing_data <- ReferandumSonucu[missing_rows,]
+```
+Bu şekilde 81 satırdan oluşan ve sadece şehirlerin genel toplamlarının olduğu bir veriye sahip oldum. Toplam seçmen sayısını bulalım o halde.
+```{r}
+sum(missing_data$kayitli)
+```
+
