@@ -1,0 +1,3 @@
+- **.html** uzantılı dosyayı indirip tarayıcınızda Markdown formatında görüntüleyebilirsiniz.
+- **.rmd** uzantılı dosya R Markdown kodlarını içermektedir.
+- **.xlsx** uzantılı dosya ise çalışmada kullandığım verisetidir. 
