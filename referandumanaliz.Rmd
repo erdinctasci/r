@@ -1,6 +1,8 @@
 ---
 title: "R ile Veri Madenciliği"
-output: html_document
+output: 
+  html_document:
+    theme: cerulean
 author: "Erdinç TAŞÇI"
 ---
 
